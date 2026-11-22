@@ -201,69 +201,73 @@ out:
 
 /* ---- the client ---- */
 
-/* the first HID interface of the configuration descriptor that is a keyboard, or any other (a pointer candidate), with its
- * interrupt-IN endpoint */
+/* the nth HID (or XInput) interface of the configuration descriptor with an interrupt-IN endpoint: a composite device
+ * (a laptop's keyboard + touchpad) has one per function */
 static int
-find_iface(const unsigned char *c, unsigned int len, int *iface, int *proto, int *ep, int *mps)
+find_iface(const unsigned char *c, unsigned int len, int nth, int *iface, int *proto, int *ep, int *mps)
 {
 	unsigned int i = 0;
-	int cur = -1, cproto = 0, found = 0;
+	int cur = -1, cproto = 0;
 
 	while (i + 2 <= len && c[i] >= 2) {
 		const unsigned char *d = c + i;
 		if (d[1] == 4 && d[0] >= 9) {					/* interface */
-			cur = (d[5] == 3) ? d[2] : -1;				/* class HID */
+			cur = (d[5] == 3 && d[3] == 0) ? d[2] : -1;		/* class HID, alternate setting 0 */
 			cproto = d[7];
-			if (d[5] == 0xFF && d[6] == 0x5D && d[7] == 0x01) {	/* an XInput gamepad (vendor class 5D/01) */
+			if (d[5] == 0xFF && d[6] == 0x5D && d[7] == 0x01 && d[3] == 0) {	/* an XInput gamepad (vendor class 5D/01) */
 				cur = d[2];
 				cproto = PROTO_XPAD;
 			}
 		} else if (d[1] == 5 && d[0] >= 7 && cur >= 0 && (d[2] & 0x80) && (d[3] & 3) == 3) {
-			*iface = cur; *proto = cproto; *ep = d[2]; *mps = d[4] | (d[5] << 8);
-			found = 1;
-			if (cproto == 1 || cproto == PROTO_XPAD)
-				return (1);					/* a keyboard or a gamepad wins */
-			cur = -1;
+			if (nth-- == 0) {
+				*iface = cur; *proto = cproto; *ep = d[2]; *mps = d[4] | (d[5] << 8);
+				return (1);
+			}
+			cur = -1;						/* one endpoint per interface */
 		}
 		i += d[0];
 	}
-	return (found);
+	return (0);
 }
 
 void
 phe_usb_hid_notify(void *dev, int attached)
 {
-	int i;
+	struct phe_usb_devinfo info;
+	int i, n;
 
-	for (i = 0; i < HID_MAX; i++)
-		if (hids[i].dev == dev) {
-			if (!attached) {
+	if (!attached) {
+		for (i = 0; i < HID_MAX; i++)
+			if (hids[i].dev == dev) {
 				if (hids[i].pipe)
 					phe_usb_pipe_close(hids[i].pipe);
 				hids[i].dev = 0;
+				hids[i].pipe = 0;
 			}
-			return;
-		}
-	if (!attached)
 		return;
-	for (i = 0; i < HID_MAX && hids[i].dev; i++)
-		;
-	if (i == HID_MAX)
+	}
+	for (i = 0; i < HID_MAX; i++)
+		if (hids[i].dev == dev)
+			return;							/* known already */
+	if (phe_usb_dev_info((phe_usb_dev *)dev, &info) != 0)
 		return;
-	{
-		struct hid *h = &hids[i];
-		struct phe_usb_devinfo info;
-		int proto = 0;
-		unsigned char *raw = (unsigned char *)h;
+	for (n = 0;; n++) {
+		struct hid t;
+		unsigned char *raw = (unsigned char *)&t;
 		unsigned int k;
+		int proto = 0;
 
-		for (k = 0; k < sizeof(*h); k++)
+		for (k = 0; k < sizeof(t); k++)
 			raw[k] = 0;
-		if (phe_usb_dev_info((phe_usb_dev *)dev, &info) != 0 ||
-		    !find_iface(info.cdesc, info.cdesclen, &h->iface, &proto, &h->ep, &h->mps))
-			return;
-		h->dev = (phe_usb_dev *)dev;
-		h->kind = (proto == 1) ? K_KBD : (proto == PROTO_XPAD) ? K_XPAD : K_PTR;
+		if (!find_iface(info.cdesc, info.cdesclen, n, &t.iface, &proto, &t.ep, &t.mps))
+			break;
+		for (i = 0; i < HID_MAX && hids[i].dev; i++)
+			;
+		if (i == HID_MAX)
+			break;
+		t.dev = (phe_usb_dev *)dev;
+		t.kind = (proto == 1) ? K_KBD : (proto == PROTO_XPAD) ? K_XPAD : K_PTR;
+		hids[i] = t;
 	}
 }
 
