@@ -1,0 +1,14 @@
+pheusb: the USB host stack of Phorepoc OS
+Copyright The Phorepoc Authors (see AUTHORS)
+
+Phorepoc was founded by Kyriakos Bompotis.
+
+The USB host stack is FreeBSD's (https://github.com/freebsd/freebsd-src, commit 043d6753ca7c, imported unmodified in
+os/third_party/freebsd-usb): the USB core, the EHCI, OHCI and xHCI drivers, the ucom/uftdi/u3g serial drivers and the
+kernel shim of FreeBSD's stand/ boot loader. Each file keeps its own copyright and licence header (BSD-2-Clause, BSD-3-Clause
+for usb_pf.h and the sys/sys headers); the main copyright holders are The FreeBSD Foundation, Hans Petter Selasky and the
+other authors named in each header. Thanks to the FreeBSD project.
+
+Our own files (os/src/usbhost) are BSD-2-Clause (LICENSE). The Symbian headers they compile against are the Symbian
+Foundation's (EPL-1.0, or EPL-2.0 with GPL-2.0-or-later as a Secondary License where Phorepoc updated them) and come from
+the Phorepoc core repository. The licence texts are in LICENSES/.
