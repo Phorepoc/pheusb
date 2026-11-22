@@ -186,7 +186,7 @@ pipe_finish(struct phe_usb_pipe *p, int err, unsigned int actual)
 static void
 pipe_callback(struct usb_xfer *xfer, usb_error_t error)
 {
-	struct phe_usb_pipe *p = usbd_xfer_get_priv(xfer);
+	struct phe_usb_pipe *p = usbd_xfer_softc(xfer);	/* priv_sc (usbd_xfer_get_priv is the fifo pointer) */
 	int actlen;
 
 	switch (USB_GET_STATE(xfer)) {

@@ -29,7 +29,9 @@ static TPhysAddr gPoolPhys;
 static TLinAddr gPoolLin;
 static TUint gPoolUsed;
 
+// the header is the free-list link + the size, 16 bytes on LP64 (8 on ILP32): the size must stay out of the caller's bytes
 struct SFreeBlock { SFreeBlock* iNext; TUint iSize; };
+static const TUint KHdr = (sizeof(SFreeBlock) + 7) & ~7u;
 static SFreeBlock* gFree;
 
 static TDynamicDfcQue* gQ;
@@ -48,16 +50,16 @@ extern "C" unsigned int phe_usb_v2p(unsigned long va)
 	return (unsigned int)va;		// not from the pool: nothing the controller may see
 	}
 
-// the kshim's malloc (HAVE_MALLOC): 8-byte header, exact-size free list (the kshim's own pool policy), bump otherwise
+// the kshim's malloc (HAVE_MALLOC): a KHdr-byte header, exact-size free list (the kshim's own pool policy), bump otherwise
 extern "C" void* usb_malloc(unsigned long aSize)
 	{
-	TUint size = (TUint)((aSize + 7) & ~7ul) + 8;
+	TUint size = (TUint)((aSize + 7) & ~7ul) + KHdr;
 	for (SFreeBlock** p = &gFree; *p; p = &(*p)->iNext)
 		if ((*p)->iSize == size)
 			{
 			SFreeBlock* b = *p; *p = b->iNext;
-			memclr((TUint8*)b + 8, size - 8);
-			return (TUint8*)b + 8;
+			memclr((TUint8*)b + KHdr, size - KHdr);
+			return (TUint8*)b + KHdr;
 			}
 	if (gPoolUsed + size > (TUint)KPoolSize)
 		{
@@ -67,15 +69,15 @@ extern "C" void* usb_malloc(unsigned long aSize)
 	SFreeBlock* b = (SFreeBlock*)(gPoolLin + gPoolUsed);
 	gPoolUsed += size;
 	b->iSize = size;
-	memclr((TUint8*)b + 8, size - 8);
-	return (TUint8*)b + 8;
+	memclr((TUint8*)b + KHdr, size - KHdr);
+	return (TUint8*)b + KHdr;
 	}
 
 extern "C" void usb_free(void* aPtr)
 	{
 	if (!aPtr)
 		return;
-	SFreeBlock* b = (SFreeBlock*)((TUint8*)aPtr - 8);
+	SFreeBlock* b = (SFreeBlock*)((TUint8*)aPtr - KHdr);
 	b->iNext = gFree;
 	gFree = b;
 	}
@@ -120,7 +122,7 @@ static void TickFn(TAny*)
 
 static void Isr(TAny* aIrq)
 	{
-	Interrupt::Disable((TInt)aIrq);
+	Interrupt::Disable((TInt)(TLinAddr)aIrq);
 	gServiceDfc->Add();
 	}
 
