@@ -10,6 +10,7 @@
 // turns a standard key into the board's own (a PC board's F9 = the phone's power key, F10 = its Menu key).
 #include <kernel/kernel.h>
 #include <e32keys.h>
+#include <e32hal.h>
 
 extern "C" {
 #include "phe_usb_hid.h"
@@ -145,6 +146,37 @@ static void OnAbs(void*, unsigned int aX, unsigned int aXmax, unsigned int aY, u
 
 static const phe_usb_hid_sink KSink = { &OnKey, &OnRel, &OnAbs, 0 };
 
+// The window server takes pointer events only when the HAL says there is a pointing device (UserHal::MachineInfo ->
+// EXYInputMouse, from EHalGroupMouse's EMouseHalMouseInfo). A board with its own (a PS/2 mouse) keeps it: AddHalEntry
+// then answers KErrInUse and this one stays unregistered.
+static TInt MouseHal(TAny*, TInt aFunction, TAny* a1, TAny*)
+	{
+	switch (aFunction)
+		{
+	case EMouseHalMouseInfo:
+		{
+		TPckgBuf<TMouseInfoV01> v;
+		v().iMouseButtons = 3;
+		v().iOffsetToDisplay.iX = 0;
+		v().iOffsetToDisplay.iY = 0;
+		v().iMouseAreaSize.iWidth = gW;
+		v().iMouseAreaSize.iHeight = gH;
+		Kern::InfoCopy(*(TDes8*)a1, v);
+		return KErrNone;
+		}
+	case EMouseHalMouseState:
+		{
+		TBool on = ETrue;
+		kumemput32(a1, &on, sizeof(TBool));
+		return KErrNone;
+		}
+	case EMouseHalSetMouseState:
+		return KErrNone;
+	default:
+		return KErrNotSupported;
+		}
+	}
+
 void PheUsbHidStart(TInt aWidth, TInt aHeight, TPheUsbKeyRemap aRemap)
 	{
 	if (aWidth > 0 && aHeight > 0)
@@ -152,5 +184,7 @@ void PheUsbHidStart(TInt aWidth, TInt aHeight, TPheUsbKeyRemap aRemap)
 	gRemap = aRemap;
 	gX = gW / 2; gY = gH / 2;
 	phe_usb_hid_set_sink(&KSink);
-	Kern::Printf("[usbh] hid: keyboards and pointers -> raw events, screen %dx%d", gW, gH);
+	const TInt h = Kern::AddHalEntry(EHalGroupMouse, MouseHal, NULL);
+	Kern::Printf("[usbh] hid: keyboards and pointers -> raw events, screen %dx%d; mouse HAL %s", gW, gH,
+					h == KErrNone ? "registered" : "already present");
 	}
