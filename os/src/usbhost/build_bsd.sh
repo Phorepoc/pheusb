@@ -8,6 +8,7 @@
 # usbd_get_page is wrapped inside the object (phe_usb_hc.c).
 # Env: ARCH=x32|x64|arm (default x32; x64 = LP64 amd64); HC="xhci ehci ohci" (the controller drivers to build); SERIAL=1 (ucom + uftdi + u3g on
 #      phe_usb_tty.c, which the board provides: PHE_USB_TTY); FB (the import, default ../../third_party/freebsd-usb);
+#      URE=1 (the RTL8152/8153 USB Ethernet driver, phe_usb_ure.c: FreeBSD if_ure's chip code; the board gives it a sink);
 #      EXTRA_SRCS (board C files, e.g. a PHY provider); GCC, HOSTCC, USBHOST_DEFS.
 set -eu
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -51,6 +52,9 @@ if [ "${SERIAL:-0}" = 1 ]; then
   ( cd "$O/gen" && awk -f "$FB/sys/tools/usbdevs2h.awk" "$U/usbdevs" -h )
   GEN=( -I"$O/gen" )
   KSRCS+=( "$U/serial/usb_serial.c" "$U/serial/uftdi.c" "$U/serial/u3g.c" )
+fi
+if [ "${URE:-0}" = 1 ]; then
+  KSRCS+=( "$HERE/phe_usb_ure.c" ); HCDEFS+=( -DPHE_USB_URE -I"$U/net" )
 fi
 KSRCS+=( ${EXTRA_SRCS:-} )
 SRCS=( "$FB/stand/usb/usb_busdma_loader.c" )

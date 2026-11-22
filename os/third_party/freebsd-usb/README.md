@@ -17,6 +17,7 @@ Pin: https://github.com/freebsd/freebsd-src commit 043d6753ca7c1c1e3ffa09a9f953f
 | stand/kshim/bsd_kernel.c, bsd_kernel.h, bsd_busspace.c, bsd_global.h, sysinit.h | same | the kernel shim |
 | stand/usb/usb_busdma_loader.c, stand/usb/tools/sysinit.c | same | busdma on flat memory; the SYSINIT table tool |
 | sys/dev/usb/serial/usb_serial.c, usb_serial.h, uftdi.c, uftdi_reg.h, u3g.c, sys/dev/usb/uftdiio.h | same | ucom + the FTDI and 3G-modem drivers |
+| sys/dev/usb/net/if_ure.c, if_urereg.h | same | the RealTek RTL8152/8153/8156 USB Ethernet driver: `os/src/usbhost/gen_ure.py` lifts its chip functions into phe_usb_ure.c (the ifnet / mbuf / miibus parts are not built) |
 | sys/dev/usb/usbdevs, sys/tools/usbdevs2h.awk | same | the vendor/product list and its generator (usbdevs.h is made at build time) |
 
 Our glue is separate: `os/src/usbhost`. These files stay byte-identical to upstream (check: `sh check.sh`, every file

@@ -8,6 +8,9 @@
 #include "phe_usb_port.h"
 #include "phe_usb_api.h"
 #include "phe_usb_hid.h"
+#ifdef PHE_USB_URE
+#include "phe_usb_ure.h"
+#endif
 
 #define PHE_USB_MAX_DEV 32
 
@@ -68,6 +71,9 @@ scan_devices(void)
 		if (j == n) {
 			known[i] = NULL;
 			phe_usb_hid_notify(k, 0);
+#ifdef PHE_USB_URE
+			phe_usb_ure_notify(k, 0);
+#endif
 			if (notify_fn)
 				notify_fn(notify_ctx, (phe_usb_dev *)k, 0);
 		}
@@ -83,6 +89,9 @@ scan_devices(void)
 			continue;
 		known[i] = now[j];
 		phe_usb_hid_notify(now[j], 1);
+#ifdef PHE_USB_URE
+		phe_usb_ure_notify(now[j], 1);
+#endif
 		if (notify_fn)
 			notify_fn(notify_ctx, (phe_usb_dev *)now[j], 1);
 	}
@@ -94,6 +103,9 @@ phe_usb_api_service(void)
 {
 	scan_devices();
 	phe_usb_hid_service();
+#ifdef PHE_USB_URE
+	phe_usb_ure_service();
+#endif
 	if (work_hook)
 		work_hook();
 }
@@ -111,6 +123,7 @@ phe_usb_dev_info(phe_usb_dev *dev, struct phe_usb_devinfo *info)
 	info->ddesc = (const unsigned char *)&u->ddesc;
 	info->cdesc = (const unsigned char *)u->cdesc;
 	info->cdesclen = u->cdesc ? UGETW(u->cdesc->wTotalLength) : 0;
+	info->superspeed = u->speed >= USB_SPEED_SUPER;
 	return (0);
 }
 

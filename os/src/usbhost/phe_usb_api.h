@@ -18,6 +18,7 @@ struct phe_usb_devinfo {
 	const unsigned char *ddesc;	/* the 18-byte device descriptor */
 	const unsigned char *cdesc;	/* the active configuration descriptor (all interfaces) */
 	unsigned int cdesclen;
+	unsigned int superspeed;	/* 1 = SuperSpeed or faster (speed then still says 2) */
 };
 
 /* A device is reported attached once it is configured and its descriptors are known, removed when the stack drops it.
