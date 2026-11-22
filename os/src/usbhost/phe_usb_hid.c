@@ -14,8 +14,62 @@ int phe_usb_printf(const char *, ...);
 
 #define HID_MAX 8
 #define REP_MAX 64
+static const struct phe_usb_hid_sink *sink;
 
-enum { K_KBD = 1, K_PTR = 2 };
+enum { K_KBD = 1, K_PTR = 2, K_XPAD = 3 };
+#define PROTO_XPAD 0x100
+
+/* ---- the XInput gamepad (the wired Xbox 360 controller protocol, as built into handhelds): a 20-byte input report,
+ * type 0x00 / length 0x14; bytes 2-3 the buttons, 4-5 the triggers, 6-13 the sticks (signed 16-bit, little endian).
+ * Written from the protocol's public descriptions (the report layout is not a HID descriptor). Buttons become keys of
+ * the Keyboard page, so a board maps them like a keyboard's; the left stick and the right trigger drive the pointer. */
+static const unsigned short xpad_keys[16] = {
+	0x52, 0x51, 0x50, 0x4F,		/* d-pad up, down, left, right -> the arrows */
+	0x43, 0x29,			/* start -> F10 (a PC board's Menu key), back -> Escape */
+	0, 0,				/* the stick clicks */
+	0x81, 0x80,			/* LB, RB -> volume down, up */
+	0x43, 0,			/* guide -> F10, - */
+	0x3F, 0x40, 0x3E, 0x28		/* A -> F6 (OK), B -> F7 (right softkey), X -> F5 (left softkey), Y -> Enter */
+};
+
+static int xpad_dx, xpad_dy;
+static unsigned int xpad_btn;	/* the stick's current motion per step, repeated by phe_usb_hid_xpad_tick() */
+
+void
+phe_usb_hid_xpad_tick(void)
+{
+	if ((xpad_dx || xpad_dy) && sink && sink->rel)
+		sink->rel(sink->ctx, xpad_dx, xpad_dy, xpad_btn);
+}
+
+void
+phe_usb_hid_xpad(const unsigned char *r, unsigned int n, unsigned int *last)
+{
+	unsigned int b, ch, i, prev = *last & 0xFFFF;
+	int lx, ly, dx, dy;
+
+	if (n < 14 || r[0] != 0x00 || r[1] < 0x14 || !sink)
+		return;
+	b = r[2] | (r[3] << 8);
+	ch = b ^ prev;
+	for (i = 0; i < 16; i++)
+		if ((ch & (1u << i)) && xpad_keys[i] && sink->key)
+			sink->key(sink->ctx, xpad_keys[i], (b >> i) & 1);
+	/* the pointer: the left stick past a dead zone, quadratic speed; RT = button 1, LT = button 2 */
+	lx = (short)(r[6] | (r[7] << 8));
+	ly = (short)(r[8] | (r[9] << 8));
+	dx = (lx > 6000 || lx < -6000) ? (int)((long)lx * (lx < 0 ? -lx : lx) / (32768L * 4096)) : 0;
+	dy = (ly > 6000 || ly < -6000) ? -(int)((long)ly * (ly < 0 ? -ly : ly) / (32768L * 4096)) : 0;
+	{
+		unsigned int btn = (r[5] > 64 ? 1u : 0) | (r[4] > 64 ? 4u : 0);
+		if ((dx || dy || btn != (*last >> 16)) && sink->rel)
+			sink->rel(sink->ctx, dx, dy, btn);
+		*last = b | (btn << 16);
+		xpad_dx = dx;
+		xpad_dy = dy;
+		xpad_btn = btn;
+	}
+}
 
 struct hid {
 	phe_usb_dev *dev;
@@ -27,7 +81,6 @@ struct hid {
 };
 
 static struct hid hids[HID_MAX];
-static const struct phe_usb_hid_sink *sink;
 
 void
 phe_usb_hid_set_sink(const struct phe_usb_hid_sink *s)
@@ -161,11 +214,15 @@ find_iface(const unsigned char *c, unsigned int len, int *iface, int *proto, int
 		if (d[1] == 4 && d[0] >= 9) {					/* interface */
 			cur = (d[5] == 3) ? d[2] : -1;				/* class HID */
 			cproto = d[7];
+			if (d[5] == 0xFF && d[6] == 0x5D && d[7] == 0x01) {	/* an XInput gamepad (vendor class 5D/01) */
+				cur = d[2];
+				cproto = PROTO_XPAD;
+			}
 		} else if (d[1] == 5 && d[0] >= 7 && cur >= 0 && (d[2] & 0x80) && (d[3] & 3) == 3) {
 			*iface = cur; *proto = cproto; *ep = d[2]; *mps = d[4] | (d[5] << 8);
 			found = 1;
-			if (cproto == 1)
-				return (1);					/* a keyboard wins */
+			if (cproto == 1 || cproto == PROTO_XPAD)
+				return (1);					/* a keyboard or a gamepad wins */
 			cur = -1;
 		}
 		i += d[0];
@@ -206,7 +263,7 @@ phe_usb_hid_notify(void *dev, int attached)
 		    !find_iface(info.cdesc, info.cdesclen, &h->iface, &proto, &h->ep, &h->mps))
 			return;
 		h->dev = (phe_usb_dev *)dev;
-		h->kind = (proto == 1) ? K_KBD : K_PTR;
+		h->kind = (proto == 1) ? K_KBD : (proto == PROTO_XPAD) ? K_XPAD : K_PTR;
 	}
 }
 
@@ -281,6 +338,8 @@ report_done(void *ctx, int err, unsigned int actual)
 	if (err == 0) {
 		if (h->kind == K_KBD)
 			deliver_kbd(h, h->rep, actual);
+		else if (h->kind == K_XPAD)
+			phe_usb_hid_xpad(h->rep, actual, &h->lastbuttons);
 		else
 			deliver_ptr(h, h->rep, actual);
 	} else if (err == PHE_USB_ERR_STALLED) {
@@ -298,12 +357,15 @@ setup(struct hid *h)
 	unsigned char desc[512];
 	unsigned int got = 0;
 
-	/* SET_IDLE(0): report on change only */
-	(void)phe_usb_ctrl(h->dev, 0x21, 0x0A, 0, (unsigned short)h->iface, 0, 0, 0);
-	if (h->kind == K_KBD) {
+	if (h->kind == K_XPAD) {
+		/* no class requests: the pad reports as soon as its interrupt pipe is read */
+	} else if (h->kind == K_KBD) {
+		/* SET_IDLE(0): report on change only */
+		(void)phe_usb_ctrl(h->dev, 0x21, 0x0A, 0, (unsigned short)h->iface, 0, 0, 0);
 		/* SET_PROTOCOL(0) = the boot protocol: the fixed 8-byte report */
 		(void)phe_usb_ctrl(h->dev, 0x21, 0x0B, 0, (unsigned short)h->iface, 0, 0, 0);
 	} else {
+		(void)phe_usb_ctrl(h->dev, 0x21, 0x0A, 0, (unsigned short)h->iface, 0, 0, 0);
 		if (phe_usb_ctrl(h->dev, 0x81, 0x06, 0x2200, (unsigned short)h->iface, desc, sizeof(desc), &got) != 0 ||
 		    phe_usb_hid_parse(desc, got, &h->ptr) != 0)
 			return (-1);
@@ -311,7 +373,9 @@ setup(struct hid *h)
 	h->pipe = phe_usb_pipe_open(h->dev, h->iface, (unsigned int)h->ep, REP_MAX);
 	if (!h->pipe)
 		return (-1);
-	if (h->kind == K_KBD)
+	if (h->kind == K_XPAD)
+		HLOG("[usbh] hid: XInput gamepad on interface %d, ep %02x\n", h->iface, h->ep);
+	else if (h->kind == K_KBD)
 		HLOG("[usbh] hid: keyboard on interface %d, ep %02x (boot protocol)\n", h->iface, h->ep);
 	else
 		HLOG("[usbh] hid: %s pointer on interface %d, ep %02x, report %d: x %d/%d y %d/%d buttons %d/%d max %ld,%ld\n",
@@ -333,5 +397,11 @@ phe_usb_hid_service(void)
 			else
 				h->failed = 1;
 		}
+	}
+	/* a held stick keeps the pointer moving (the pad reports only on change): every 10th pass, about 100 Hz */
+	{
+		static unsigned int pass;
+		if (++pass % 10 == 0)
+			phe_usb_hid_xpad_tick();
 	}
 }

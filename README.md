@@ -15,7 +15,7 @@ os/src/usbhost/                our side, BSD-2-Clause:
   phe_usb_port.h                 the seam between the stack and the kernel (memory, time, locks, barriers)
   phe_usb_hc.c                   the generic root bus and the controller attach (xHCI / EHCI / OHCI)
   phe_usb_api.{h,c}              the stack as a plain C service: devices as attach/detach events, control transfers, pipes
-  phe_usb_hid.{h,c}              a boot-protocol HID client (keyboards, mice) and absolute pointers (tablets)
+  phe_usb_hid.{h,c}              a HID client: boot-protocol keyboards, mice, tablets / touch screens, XInput gamepads
   ekern/                         the USB thread, its 1 ms tick and memory pool; the libc the stack needs
   ldd/                           the USBHUBDRIVER and USBDI logical devices of the 2010 user side
   build_bsd.sh                   builds the C side into one relocatable object (ARCH=x32, x64 or arm)

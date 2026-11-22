@@ -20,6 +20,12 @@ int phe_usb_pipe_start(phe_usb_pipe *p, void *b, unsigned int l, int z, phe_usb_
 int phe_usb_pipe_clear_stall(phe_usb_pipe *p) { (void)p; return 0; }
 
 static int fails;
+
+static unsigned int keys[16], downs[16], nkeys, rels, lastb;
+static int sdx, sdy;
+static void k(void *c, unsigned int u, int d) { (void)c; if (nkeys < 16) { keys[nkeys] = u; downs[nkeys++] = (unsigned int)d; } }
+static void r(void *c, int dx, int dy, unsigned int b) { (void)c; rels++; sdx = dx; sdy = dy; lastb = b; }
+static const struct phe_usb_hid_sink sinkt = { k, r, 0, 0 };
 #define CHECK(c) do { if (!(c)) { printf("FAIL %d: %s\n", __LINE__, #c); fails++; } } while (0)
 
 static const unsigned char tablet[] = {
@@ -75,6 +81,35 @@ int main(void)
 	}
 
 	CHECK(phe_usb_hid_parse(touch, 20, &p) != 0);			/* truncated: no X/Y */
+
+	/* XInput: A down, then d-pad up + A up, then the left stick hard right + RT */
+	{
+		unsigned char x[20] = { 0x00, 0x14 };
+		unsigned int last = 0;
+		phe_usb_hid_set_sink(&sinkt);
+		x[3] = 0x10;					/* A */
+		phe_usb_hid_xpad(x, 20, &last);
+		CHECK(nkeys == 1 && keys[0] == 0x3F && downs[0] == 1);
+		x[3] = 0; x[2] = 0x01;				/* A up, d-pad up down */
+		phe_usb_hid_xpad(x, 20, &last);
+		CHECK(nkeys == 3 && keys[1] == 0x52 && downs[1] == 1 && keys[2] == 0x3F && downs[2] == 0);
+		x[2] = 0; x[6] = 0xff; x[7] = 0x7f; x[5] = 0xff;	/* stick x = 32767, RT full */
+		rels = 0;
+		phe_usb_hid_xpad(x, 20, &last);
+		CHECK(rels == 1 && sdx > 4 && sdy == 0 && lastb == 1);
+		phe_usb_hid_xpad_tick();
+		CHECK(rels == 2 && sdx > 4 && lastb == 1);	/* the held stick repeats */
+		x[6] = 0; x[7] = 0; x[5] = 0;
+		phe_usb_hid_xpad(x, 20, &last);
+		CHECK(lastb == 0 && sdx == 0);
+		rels = 0;
+		phe_usb_hid_xpad_tick();
+		CHECK(rels == 0);				/* centred: no motion */
+		x[1] = 0x03;					/* not an input report */
+		nkeys = 0;
+		phe_usb_hid_xpad(x, 20, &last);
+		CHECK(nkeys == 0);
+	}
 
 	printf("hid: %s\n", fails ? "FAIL" : "PASS");
 	return fails ? 1 : 0;

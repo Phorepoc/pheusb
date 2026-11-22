@@ -43,4 +43,10 @@ int phe_usb_hid_parse(const unsigned char *desc, unsigned int len, struct phe_us
 unsigned int phe_usb_hid_field(const unsigned char *rep, unsigned int len, int pos, int size);
 int phe_usb_hid_sfield(const unsigned char *rep, unsigned int len, int pos, int size);
 
+/* an XInput gamepad's 20-byte report -> keys (d-pad = arrows, A = F6, B = F7, X = F5, Y = Enter, start/guide = F10,
+ * back = Escape, LB/RB = volume) and a relative pointer (left stick; RT = button 1, LT = button 3). *last = the previous
+ * state (start at 0). The tick repeats the held stick's motion. */
+void phe_usb_hid_xpad(const unsigned char *rep, unsigned int len, unsigned int *last);
+void phe_usb_hid_xpad_tick(void);
+
 #endif
