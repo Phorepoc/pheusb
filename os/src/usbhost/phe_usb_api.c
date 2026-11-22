@@ -7,6 +7,7 @@
 
 #include "phe_usb_port.h"
 #include "phe_usb_api.h"
+#include "phe_usb_hid.h"
 
 #define PHE_USB_MAX_DEV 32
 
@@ -66,6 +67,7 @@ scan_devices(void)
 			;
 		if (j == n) {
 			known[i] = NULL;
+			phe_usb_hid_notify(k, 0);
 			if (notify_fn)
 				notify_fn(notify_ctx, (phe_usb_dev *)k, 0);
 		}
@@ -80,6 +82,7 @@ scan_devices(void)
 		if (i == PHE_USB_MAX_DEV)
 			continue;
 		known[i] = now[j];
+		phe_usb_hid_notify(now[j], 1);
 		if (notify_fn)
 			notify_fn(notify_ctx, (phe_usb_dev *)now[j], 1);
 	}
@@ -90,6 +93,7 @@ void
 phe_usb_api_service(void)
 {
 	scan_devices();
+	phe_usb_hid_service();
 	if (work_hook)
 		work_hook();
 }

@@ -6,7 +6,7 @@
 # phe_usb_api.c and phe_usb_libc.c, compiled for the board's kernel and collected into ONE relocatable object,
 # <out-dir>/usbhost_bsd.o, with the kshim's SYSINIT tables generated as FreeBSD's stand/kshim/kshim.mk does.
 # usbd_get_page is wrapped inside the object (phe_usb_hc.c).
-# Env: ARCH=x32|arm (default x32); HC="xhci ehci ohci" (the controller drivers to build); SERIAL=1 (ucom + uftdi + u3g on
+# Env: ARCH=x32|x64|arm (default x32; x64 = LP64 amd64); HC="xhci ehci ohci" (the controller drivers to build); SERIAL=1 (ucom + uftdi + u3g on
 #      phe_usb_tty.c, which the board provides: PHE_USB_TTY); FB (the import, default ../../third_party/freebsd-usb);
 #      EXTRA_SRCS (board C files, e.g. a PHY provider); GCC, HOSTCC, USBHOST_DEFS.
 set -eu
@@ -21,6 +21,10 @@ case "$ARCHN" in
   x32) GCC="${GCC:-gcc}"; LD="${LD:-ld}"; OBJCOPY="${OBJCOPY:-objcopy}"; LDM="-m elf32_x86_64"
        ARCHF=( -mx32 -mno-red-zone -mgeneral-regs-only -ffreestanding -fno-strict-aliasing -fno-stack-protector
          -fno-tree-loop-distribute-patterns -O2 -fno-pic -fno-pie -fno-common ) ;;
+  x64) GCC="${GCC:-gcc}"; LD="${LD:-ld}"; OBJCOPY="${OBJCOPY:-objcopy}"; LDM="-m elf_x86_64"
+       # LP64 (-m64): the kernel's code model is large (its image and heaps live above 4 GiB)
+       ARCHF=( -m64 -mcmodel=large -mno-red-zone -mgeneral-regs-only -ffreestanding -fno-strict-aliasing -fno-stack-protector
+         -fno-tree-loop-distribute-patterns -O2 -fno-pic -fno-pie -fno-common ) ;;
   arm) GCC="${GCC:-arm-none-eabi-gcc}"; LD="${LD:-${GCC%gcc}ld}"; OBJCOPY="${OBJCOPY:-${GCC%gcc}objcopy}"; LDM=""
        ARCHF=( -march=armv7-a -marm -mfloat-abi=soft -fno-short-enums -mno-unaligned-access -ffreestanding
          -fno-strict-aliasing -O2 -fno-pic -fno-common ) ;;
@@ -31,7 +35,7 @@ KSRCS=(
   "$U/usb_core.c" "$U/usb_debug.c" "$U/usb_device.c" "$U/usb_dynamic.c" "$U/usb_error.c"
   "$U/usb_handle_request.c" "$U/usb_hid.c" "$U/usb_hub.c" "$U/usb_lookup.c" "$U/usb_msctest.c"
   "$U/usb_parse.c" "$U/usb_request.c" "$U/usb_transfer.c" "$U/usb_util.c"
-  "$HERE/phe_usb_hc.c" "$HERE/phe_usb_api.c"
+  "$HERE/phe_usb_hc.c" "$HERE/phe_usb_api.c" "$HERE/phe_usb_hid.c"
 )
 HCDEFS=()
 for h in $HC; do
