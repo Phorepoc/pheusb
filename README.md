@@ -11,7 +11,7 @@ here names a board or a chip.
 
 ```
 os/third_party/freebsd-usb/    FreeBSD's USB stack at commit 043d6753ca7c, unmodified (check.sh verifies it against SHA256SUMS)
-os/src/usbhost/                our side, BSD-2-Clause:
+os/src/usbhost/                Phorepoc's side, BSD-2-Clause:
   phe_usb_port.h                 the seam between the stack and the kernel (memory, time, locks, barriers)
   phe_usb_hc.c                   the generic root bus and the controller attach (xHCI / EHCI / OHCI)
   phe_usb_api.{h,c}              the stack as a plain C service: devices as attach/detach events, control transfers, pipes

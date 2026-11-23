@@ -9,6 +9,6 @@ kernel shim of FreeBSD's stand/ boot loader. Each file keeps its own copyright a
 for usb_pf.h and the sys/sys headers); the main copyright holders are The FreeBSD Foundation, Hans Petter Selasky and the
 other authors named in each header. Thanks to the FreeBSD project.
 
-Our own files (os/src/usbhost) are BSD-2-Clause (LICENSE). The Symbian headers they compile against are the Symbian
+Phorepoc's own files (os/src/usbhost) are BSD-2-Clause (LICENSE). The Symbian headers they compile against are the Symbian
 Foundation's (EPL-1.0, or EPL-2.0 with GPL-2.0-or-later as a Secondary License where Phorepoc updated them) and come from
 the Phorepoc core repository. The licence texts are in LICENSES/.
