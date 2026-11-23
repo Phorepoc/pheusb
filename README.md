@@ -31,7 +31,5 @@ the object into the kernel image.
 
 ## License
 
-Our own files are BSD-2-Clause (`LICENSE`). FreeBSD's files keep their own headers (BSD-2-Clause, and BSD-3-Clause for a
-few). `NOTICE` names the copyright holders, and the licence texts are in `LICENSES/`.
-
-Contributions are welcome under the same terms. Add your name to `AUTHORS` in your first pull request.
+This repository is under FreeBSD's licence (BSD-2-Clause, see `LICENSE`), as port work on FreeBSD's USB stack. FreeBSD's files keep their own headers (BSD-2-Clause, and BSD-3-Clause for a few). `NOTICE` names the copyright holders, and the licence texts are in `LICENSES/`.
+Files adapted from other projects keep their authors' copyright (see `AUTHORS` and `NOTICE`). Contributions are under the same terms. Add your name to `AUTHORS` in your first pull request.
